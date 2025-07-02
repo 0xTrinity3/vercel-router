@@ -22,6 +22,7 @@ export const config = {
 const SUPABASE_URL = process.env.SUPABASE_URL!;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY!;
 const VERCEL_AUTOMATION_TOKEN = process.env.VERCEL_AUTOMATION_TOKEN;
+console.log(`VERCEL_AUTOMATION_TOKEN loaded: ${!!VERCEL_AUTOMATION_TOKEN}, Length: ${VERCEL_AUTOMATION_TOKEN?.length || 0}`);
 
 export default async function handler(request: Request) {
   const url = new URL(request.url);
@@ -107,6 +108,7 @@ export default async function handler(request: Request) {
       agentResponse = await fetch(currentUrl, {
         headers: outboundHeaders,
         redirect: 'manual',
+        cache: 'no-store',
       });
       // Log status and headers
       console.log(`[Proxy] ${currentUrl} -> status: ${agentResponse.status}`);
