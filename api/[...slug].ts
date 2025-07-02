@@ -20,6 +20,7 @@ export const config = {
 // IMPORTANT: These environment variables must be set in your Vercel project settings.
 const SUPABASE_URL = process.env.SUPABASE_URL!;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY!;
+const VERCEL_AUTOMATION_TOKEN = process.env.VERCEL_AUTOMATION_TOKEN;
 
 export default async function handler(request: Request) {
   const url = new URL(request.url);
@@ -77,6 +78,13 @@ export default async function handler(request: Request) {
         outboundHeaders.set(key, value);
       }
     });
+    // Add the Vercel Automation Token to bypass deployment protection
+    if (VERCEL_AUTOMATION_TOKEN) {
+      outboundHeaders.set('Authorization', `Bearer ${VERCEL_AUTOMATION_TOKEN}`);
+    } else {
+      console.warn('VERCEL_AUTOMATION_TOKEN is not set. Requests to protected deployments may fail.');
+    }
+
     // Log outbound headers
     outboundHeaders.forEach((value, key) => {
       console.log(`[Proxy outbound header] ${key}: ${value}`);
