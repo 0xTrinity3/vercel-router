@@ -47,10 +47,12 @@ export default async function handler(request: Request) {
         const targetUrl = new URL(remainingPath + url.search, previewUrl);
 
     // --- Robust proxy logic ---
-    // Only proxy minimal headers
+    // Proxy minimal headers plus referer and origin if present
     const outboundHeaders = new Headers();
     if (request.headers.has('accept')) outboundHeaders.set('accept', request.headers.get('accept')!);
     if (request.headers.has('user-agent')) outboundHeaders.set('user-agent', request.headers.get('user-agent')!);
+    if (request.headers.has('referer')) outboundHeaders.set('referer', request.headers.get('referer')!);
+    if (request.headers.has('origin')) outboundHeaders.set('origin', request.headers.get('origin')!);
 
     // Log outbound headers
     outboundHeaders.forEach((value, key) => {
@@ -104,8 +106,6 @@ export default async function handler(request: Request) {
     return new Response('An internal error occurred.', { status: 500 });
   }
 }
-
-
 
 
 
