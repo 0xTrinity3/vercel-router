@@ -48,7 +48,7 @@ export default async function handler(request: Request) {
 
     const agentResponse = await fetch(targetUrl.toString(), {
         headers: request.headers,
-        redirect: 'manual',
+        redirect: 'follow',
     });
     
     // 3. Stream the response back to the client
@@ -68,5 +68,6 @@ export default async function handler(request: Request) {
     return new Response('An internal error occurred.', { status: 500 });
   }
 }
+
 
 
