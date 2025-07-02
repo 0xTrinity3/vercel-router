@@ -8,7 +8,9 @@ const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY!;
 
 export default async function handler(request: Request) {
   const url = new URL(request.url);
-  const slug = url.pathname.slice(1);
+    const pathSegments = url.pathname.slice(1).split('/').filter(Boolean);
+  const slug = pathSegments[0];
+  const remainingPath = '/' + pathSegments.slice(1).join('/');
 
   if (!slug) {
     return new Response('Agent slug not specified.', { status: 400 });
@@ -37,7 +39,7 @@ export default async function handler(request: Request) {
 
     // 2. Fetch the content from the agent's Vercel deployment URL
     // We need to construct the full URL to the resource on the target deployment.
-    const targetUrl = new URL(url.pathname + url.search, previewUrl);
+        const targetUrl = new URL(remainingPath + url.search, previewUrl);
 
     const agentResponse = await fetch(targetUrl.toString(), {
         headers: request.headers,
@@ -61,3 +63,4 @@ export default async function handler(request: Request) {
     return new Response('An internal error occurred.', { status: 500 });
   }
 }
+
