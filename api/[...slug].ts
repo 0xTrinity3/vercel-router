@@ -46,9 +46,15 @@ export default async function handler(request: Request) {
     // We need to construct the full URL to the resource on the target deployment.
         const targetUrl = new URL(remainingPath + url.search, previewUrl);
 
+    // We must create a new set of headers for the outbound request.
+    // Crucially, we must not forward the original 'host' header.
+    // Fetch will automatically set the correct host based on the targetUrl.
+    const outboundHeaders = new Headers(request.headers);
+    outboundHeaders.delete('host');
+
     const agentResponse = await fetch(targetUrl.toString(), {
-      headers: request.headers,
-      redirect: 'follow',
+      headers: outboundHeaders,
+      redirect: 'follow', // Keep this to handle internal redirects within the agent app
     });
     
     // 3. Create new headers for the response, filtering out any that could cause issues.
@@ -77,6 +83,7 @@ export default async function handler(request: Request) {
     return new Response('An internal error occurred.', { status: 500 });
   }
 }
+
 
 
 
