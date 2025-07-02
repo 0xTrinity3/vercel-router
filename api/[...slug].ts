@@ -48,10 +48,6 @@ export default async function handler(request: Request) {
 
     // --- Robust proxy logic ---
     // Proxy all headers except problematic hop-by-hop ones
-    const hopByHop = [
-      'host', 'connection', 'keep-alive', 'proxy-authenticate', 'proxy-authorization',
-      'te', 'trailer', 'transfer-encoding', 'upgrade', 'content-encoding', 'content-length'
-    ];
     const outboundHeaders = new Headers();
     request.headers.forEach((value, key) => {
       if (!hopByHop.includes(key.toLowerCase())) {
@@ -110,6 +106,3 @@ export default async function handler(request: Request) {
     return new Response('An internal error occurred.', { status: 500 });
   }
 }
-
-
-
