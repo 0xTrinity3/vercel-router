@@ -1,3 +1,18 @@
+const hopByHop = [
+  'host',
+  'connection',
+  'keep-alive',
+  'proxy-authenticate',
+  'proxy-authorization',
+  'te',
+  'trailer',
+  'transfer-encoding',
+  'upgrade',
+  'content-encoding',
+  'content-length',
+  'location',
+];
+
 export const config = {
   runtime: 'edge',
 };
@@ -85,10 +100,6 @@ export default async function handler(request: Request) {
       return new Response(`Router: Agent returned status ${agentResponse.status}`, { status: 502 });
     }
     // Remove hop-by-hop headers
-    const hopByHop = [
-      'connection', 'keep-alive', 'proxy-authenticate', 'proxy-authorization',
-      'te', 'trailer', 'transfer-encoding', 'upgrade', 'content-encoding', 'content-length', 'location'
-    ];
     const responseHeaders = new Headers();
     agentResponse.headers.forEach((value, key) => {
       if (!hopByHop.includes(key.toLowerCase())) {
