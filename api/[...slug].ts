@@ -72,10 +72,19 @@ export default async function handler(request: Request) {
         const targetUrl = new URL(remainingPath + url.search, previewUrl);
 
     // --- Robust proxy logic ---
-    // Proxy all headers except problematic hop-by-hop ones
+    // Create a new set of headers, allowing only specific safe ones to be passed through.
+    // This prevents unexpected client headers from interfering with Vercel's auth.
     const outboundHeaders = new Headers();
+    const allowedHeaders = [
+      'accept',
+      'accept-encoding',
+      'accept-language',
+      'user-agent',
+      'referer',
+    ];
+
     request.headers.forEach((value, key) => {
-      if (!hopByHop.includes(key.toLowerCase())) {
+      if (allowedHeaders.includes(key.toLowerCase())) {
         outboundHeaders.set(key, value);
       }
     });
@@ -142,4 +151,5 @@ export default async function handler(request: Request) {
     return new Response('An internal error occurred.', { status: 500 });
   }
 }
+
 
