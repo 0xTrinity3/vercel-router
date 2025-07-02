@@ -90,6 +90,7 @@ export default async function handler(request: Request) {
       }
     });
     // Add the Vercel Automation Token to bypass deployment protection
+    console.log(`[Proxy] VERCEL_AUTOMATION_TOKEN is present: ${!!VERCEL_AUTOMATION_TOKEN}`);
     if (VERCEL_AUTOMATION_TOKEN) {
       outboundHeaders.set('Authorization', `Bearer ${VERCEL_AUTOMATION_TOKEN}`);
     }
@@ -151,6 +152,4 @@ export default async function handler(request: Request) {
     return new Response('An internal error occurred.', { status: 500 });
   }
 }
-
-
 
