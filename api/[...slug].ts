@@ -47,8 +47,15 @@ export default async function handler(request: Request) {
         const targetUrl = new URL(remainingPath + url.search, previewUrl);
 
     // --- Robust proxy logic ---
-    const outboundHeaders = new Headers(request.headers);
-    outboundHeaders.delete('host');
+    // Only proxy minimal headers
+    const outboundHeaders = new Headers();
+    if (request.headers.has('accept')) outboundHeaders.set('accept', request.headers.get('accept')!);
+    if (request.headers.has('user-agent')) outboundHeaders.set('user-agent', request.headers.get('user-agent')!);
+
+    // Log outbound headers
+    outboundHeaders.forEach((value, key) => {
+      console.log(`[Proxy outbound header] ${key}: ${value}`);
+    });
 
     let currentUrl = targetUrl.toString();
     let agentResponse;
@@ -97,6 +104,7 @@ export default async function handler(request: Request) {
     return new Response('An internal error occurred.', { status: 500 });
   }
 }
+
 
 
 
