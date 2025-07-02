@@ -47,13 +47,17 @@ export default async function handler(request: Request) {
         const targetUrl = new URL(remainingPath + url.search, previewUrl);
 
     // --- Robust proxy logic ---
-    // Proxy minimal headers plus referer and origin if present
+    // Proxy all headers except problematic hop-by-hop ones
+    const hopByHop = [
+      'host', 'connection', 'keep-alive', 'proxy-authenticate', 'proxy-authorization',
+      'te', 'trailer', 'transfer-encoding', 'upgrade', 'content-encoding', 'content-length'
+    ];
     const outboundHeaders = new Headers();
-    if (request.headers.has('accept')) outboundHeaders.set('accept', request.headers.get('accept')!);
-    if (request.headers.has('user-agent')) outboundHeaders.set('user-agent', request.headers.get('user-agent')!);
-    if (request.headers.has('referer')) outboundHeaders.set('referer', request.headers.get('referer')!);
-    if (request.headers.has('origin')) outboundHeaders.set('origin', request.headers.get('origin')!);
-
+    request.headers.forEach((value, key) => {
+      if (!hopByHop.includes(key.toLowerCase())) {
+        outboundHeaders.set(key, value);
+      }
+    });
     // Log outbound headers
     outboundHeaders.forEach((value, key) => {
       console.log(`[Proxy outbound header] ${key}: ${value}`);
