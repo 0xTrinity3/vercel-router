@@ -22,7 +22,7 @@ export const config = {
 const SUPABASE_URL = process.env.SUPABASE_URL!;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY!;
 const VERCEL_AUTOMATION_TOKEN = process.env.VERCEL_AUTOMATION_TOKEN;
-
+const VERCEL_PROTECTION_BYPASS_SECRET = process.env.VERCEL_PROTECTION_BYPASS_SECRET;
 
 export default async function handler(request: Request) {
   const url = new URL(request.url);
@@ -89,9 +89,10 @@ export default async function handler(request: Request) {
         outboundHeaders.set(key, value);
       }
     });
-    // Add the Vercel Automation Token to bypass deployment protection
-    console.log(`[Proxy] VERCEL_AUTOMATION_TOKEN is present: ${!!VERCEL_AUTOMATION_TOKEN}`);
-    if (VERCEL_AUTOMATION_TOKEN) {
+    // Add the Vercel Protection Bypass Secret or Automation Token
+    if (VERCEL_PROTECTION_BYPASS_SECRET) {
+      outboundHeaders.set('x-vercel-protection-bypass', VERCEL_PROTECTION_BYPASS_SECRET);
+    } else if (VERCEL_AUTOMATION_TOKEN) {
       outboundHeaders.set('Authorization', `Bearer ${VERCEL_AUTOMATION_TOKEN}`);
     }
 
@@ -152,4 +153,5 @@ export default async function handler(request: Request) {
     return new Response('An internal error occurred.', { status: 500 });
   }
 }
+
 
