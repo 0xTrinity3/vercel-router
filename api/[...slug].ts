@@ -32,6 +32,13 @@ export default async function handler(request: Request) {
   const slug = pathSegments[0];
   const remainingPath = '/' + pathSegments.slice(1).join('/');
 
+  // Ignore favicon requests to prevent log noise
+  if (slug === 'favicon.ico' || slug === 'favicon.png') {
+    return new Response(null, { status: 204 }); // No Content
+  }
+
+  console.log(`Router: Received request for slug: "${slug}"`);
+
   if (!slug) {
     return new Response('Agent slug not specified.', { status: 400 });
   }
@@ -39,6 +46,7 @@ export default async function handler(request: Request) {
   try {
     // 1. Look up the project in Supabase by its slug using the REST API
     const supabaseUrl = `${SUPABASE_URL}/rest/v1/projects?select=preview_url&slug=eq.${slug}`;
+    console.log(`Router: Querying Supabase with URL: ${supabaseUrl}`);
     const supabaseResponse = await fetch(supabaseUrl, {
       headers: {
         'apikey': SUPABASE_ANON_KEY,
@@ -95,9 +103,17 @@ export default async function handler(request: Request) {
       currentUrl = new URL(location, currentUrl).toString();
       redirectCount++;
     }
-    // Only proxy 200 responses
+    // If the agent returned an error, proxy the error response to the client for debugging
     if (agentResponse.status !== 200) {
-      return new Response(`Router: Agent returned status ${agentResponse.status}`, { status: 502 });
+      const errorBody = await agentResponse.text();
+      console.error(`Router: Agent returned status ${agentResponse.status}. Body: ${errorBody}`);
+      return new Response(
+        `The agent application returned an error.\n\nStatus: ${agentResponse.status}\nBody:\n${errorBody}`,
+        { 
+          status: 502, 
+          headers: { 'Content-Type': 'text/plain' } 
+        }
+      );
     }
     // Remove hop-by-hop headers
     const responseHeaders = new Headers();
