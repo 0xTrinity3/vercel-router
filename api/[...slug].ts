@@ -11,6 +11,7 @@ const hopByHop = [
   'content-encoding',
   'content-length',
   'location',
+  'cookie',
 ];
 
 export const config = {
@@ -141,3 +142,4 @@ export default async function handler(request: Request) {
     return new Response('An internal error occurred.', { status: 500 });
   }
 }
+
