@@ -46,37 +46,51 @@ export default async function handler(request: Request) {
     // We need to construct the full URL to the resource on the target deployment.
         const targetUrl = new URL(remainingPath + url.search, previewUrl);
 
-    // We must create a new set of headers for the outbound request.
-    // Crucially, we must not forward the original 'host' header.
-    // Fetch will automatically set the correct host based on the targetUrl.
+    // --- Robust proxy logic ---
     const outboundHeaders = new Headers(request.headers);
     outboundHeaders.delete('host');
 
-    const agentResponse = await fetch(targetUrl.toString(), {
-      headers: outboundHeaders,
-      redirect: 'follow', // Keep this to handle internal redirects within the agent app
-    });
-    
-    // 3. Create new headers for the response, filtering out any that could cause issues.
+    let currentUrl = targetUrl.toString();
+    let agentResponse;
+    let redirectCount = 0;
+    while (redirectCount < 3) {
+      agentResponse = await fetch(currentUrl, {
+        headers: outboundHeaders,
+        redirect: 'manual',
+      });
+      // Log status and headers
+      console.log(`[Proxy] ${currentUrl} -> status: ${agentResponse.status}`);
+      agentResponse.headers.forEach((value, key) => {
+        console.log(`[Proxy header] ${key}: ${value}`);
+      });
+      // If not a redirect, break
+      if (![301, 302, 303, 307, 308].includes(agentResponse.status)) break;
+      // Otherwise, follow the Location header
+      const location = agentResponse.headers.get('location');
+      if (!location) break;
+      currentUrl = new URL(location, currentUrl).toString();
+      redirectCount++;
+    }
+    // Only proxy 200 responses
+    if (agentResponse.status !== 200) {
+      return new Response(`Router: Agent returned status ${agentResponse.status}`, { status: 502 });
+    }
+    // Remove hop-by-hop headers
+    const hopByHop = [
+      'connection', 'keep-alive', 'proxy-authenticate', 'proxy-authorization',
+      'te', 'trailer', 'transfer-encoding', 'upgrade', 'content-encoding', 'content-length', 'location'
+    ];
     const responseHeaders = new Headers();
     agentResponse.headers.forEach((value, key) => {
-      // Do not copy the 'location' header, which would cause a client-side redirect.
-      // Also filter other hop-by-hop headers that shouldn't be proxied.
-      if (key.toLowerCase() !== 'location' && key.toLowerCase() !== 'content-encoding' && key.toLowerCase() !== 'content-length') {
+      if (!hopByHop.includes(key.toLowerCase())) {
         responseHeaders.set(key, value);
       }
     });
-
-    // 4. Stream the response back to the client
-    const response = new Response(agentResponse.body, {
+    // Stream the response back to the client
+    return new Response(agentResponse.body, {
       headers: responseHeaders,
-      status: agentResponse.status, // This should be 200 if the redirect was followed successfully
+      status: agentResponse.status
     });
-    
-    // Clean up Vercel-specific headers
-    response.headers.delete('x-vercel-id');
-
-    return response;
 
   } catch (e) {
     console.error('Router error:', e);
