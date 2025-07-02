@@ -91,11 +91,7 @@ export default async function handler(request: Request) {
     });
     // Add the Vercel Automation Token to bypass deployment protection
     if (VERCEL_AUTOMATION_TOKEN) {
-      const maskedToken = `${VERCEL_AUTOMATION_TOKEN.substring(0, 5)}...${VERCEL_AUTOMATION_TOKEN.substring(VERCEL_AUTOMATION_TOKEN.length - 4)}`;
-      console.log(`[Proxy] Using Authorization header: Bearer ${maskedToken}`);
       outboundHeaders.set('Authorization', `Bearer ${VERCEL_AUTOMATION_TOKEN}`);
-    } else {
-      console.log('[Proxy] VERCEL_AUTOMATION_TOKEN is not set. Proceeding without Authorization header.');
     }
 
     // Log outbound headers
