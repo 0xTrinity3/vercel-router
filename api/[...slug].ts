@@ -47,15 +47,24 @@ export default async function handler(request: Request) {
         const targetUrl = new URL(remainingPath + url.search, previewUrl);
 
     const agentResponse = await fetch(targetUrl.toString(), {
-        headers: request.headers,
-        redirect: 'follow',
+      headers: request.headers,
+      redirect: 'follow',
     });
     
-    // 3. Stream the response back to the client
+    // 3. Create new headers for the response, filtering out any that could cause issues.
+    const responseHeaders = new Headers();
+    agentResponse.headers.forEach((value, key) => {
+      // Do not copy the 'location' header, which would cause a client-side redirect.
+      // Also filter other hop-by-hop headers that shouldn't be proxied.
+      if (key.toLowerCase() !== 'location' && key.toLowerCase() !== 'content-encoding' && key.toLowerCase() !== 'content-length') {
+        responseHeaders.set(key, value);
+      }
+    });
+
+    // 4. Stream the response back to the client
     const response = new Response(agentResponse.body, {
-        status: agentResponse.status,
-        statusText: agentResponse.statusText,
-        headers: agentResponse.headers,
+      headers: responseHeaders,
+      status: agentResponse.status, // This should be 200 if the redirect was followed successfully
     });
     
     // Clean up Vercel-specific headers
