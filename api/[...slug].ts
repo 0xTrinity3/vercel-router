@@ -8,9 +8,10 @@ const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY!;
 
 export default async function handler(request: Request) {
   const url = new URL(request.url);
+        // The vercel.json rewrites all paths to /api/..., so we must account for the '/api' prefix.
     const pathSegments = url.pathname.slice(1).split('/').filter(Boolean);
-  const slug = pathSegments[0];
-  const remainingPath = '/' + pathSegments.slice(1).join('/');
+    const slug = pathSegments[1]; // The first segment is 'api', the second is the slug.
+    const remainingPath = '/' + pathSegments.slice(2).join('/');
 
   if (!slug) {
     return new Response('Agent slug not specified.', { status: 400 });
@@ -63,4 +64,5 @@ export default async function handler(request: Request) {
     return new Response('An internal error occurred.', { status: 500 });
   }
 }
+
 
