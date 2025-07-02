@@ -3,7 +3,5 @@
   "version": "1.0.0",
   "description": "A Vercel Edge Function to route requests to Based Agents projects.",
 
-  "dependencies": {
-    "@supabase/supabase-js": "^2.0.0"
-  }
+  "dependencies": {}
 }
