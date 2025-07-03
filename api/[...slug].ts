@@ -151,9 +151,10 @@ export default async function handler(request: Request) {
       // Inject the base tag right after the <head> tag.
       // This ensures all relative paths in the document are resolved from the correct sub-path.
       const baseHref = `/${slug}/`;
-      // A more robust solution might use a proper HTML parser, but this is fast and effective for this use case.
-      if (body.includes('<head>')) {
-        body = body.replace('<head>', `<head><base href="${baseHref}">`);
+      // Use a regular expression to robustly inject the base tag after the opening <head> tag, regardless of its attributes.
+      const headRegex = /<head[^>]*>/i;
+      if (headRegex.test(body)) {
+        body = body.replace(headRegex, `$&<base href="${baseHref}">`);
       } else {
         // Fallback if no <head> tag is present (less likely for full HTML docs)
         body = `<head><base href="${baseHref}"></head>` + body;
