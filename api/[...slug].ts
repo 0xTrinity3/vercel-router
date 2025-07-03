@@ -143,19 +143,25 @@ export default async function handler(request: Request) {
       }
     });
     const contentType = responseHeaders.get('content-type') || '';
+    console.log(`Router: Agent response Content-Type: "${contentType}" for path: ${remainingPath}`);
 
     // If it's an HTML file, we need to inject a <base> tag to fix relative paths
     if (contentType.includes('text/html')) {
+      console.log('Router: Content is HTML, attempting to inject <base> tag.');
       let body = await agentResponse.text();
       
       // Inject the base tag right after the <head> tag.
       // This ensures all relative paths in the document are resolved from the correct sub-path.
       const baseHref = `/${slug}/`;
+      console.log(`Router: Injecting baseHref: "${baseHref}"`);
+
       // Use a regular expression to robustly inject the base tag after the opening <head> tag, regardless of its attributes.
       const headRegex = /<head[^>]*>/i;
       if (headRegex.test(body)) {
         body = body.replace(headRegex, `$&<base href="${baseHref}">`);
+        console.log('Router: <base> tag injected successfully.');
       } else {
+        console.log('Router: No <head> tag found, prepending new <head> with <base> tag.');
         // Fallback if no <head> tag is present (less likely for full HTML docs)
         body = `<head><base href="${baseHref}"></head>` + body;
       }
