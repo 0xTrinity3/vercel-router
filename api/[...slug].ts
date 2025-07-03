@@ -89,11 +89,12 @@ export default async function handler(request: Request) {
         outboundHeaders.set(key, value);
       }
     });
-    // Add the Vercel Protection Bypass Secret or Automation Token
-    if (VERCEL_PROTECTION_BYPASS_SECRET) {
-      outboundHeaders.set('x-vercel-protection-bypass', VERCEL_PROTECTION_BYPASS_SECRET);
-    } else if (VERCEL_AUTOMATION_TOKEN) {
-      outboundHeaders.set('Authorization', `Bearer ${VERCEL_AUTOMATION_TOKEN}`);
+    // The Vercel Protection Bypass is handled by the `__VERCEL_PROTECTION_BYPASS` query parameter,
+    // which is already included in the `preview_url` fetched from Supabase.
+    // No additional headers are needed for this authentication method.
+    // For other auth methods, the Vercel Automation Token might be used.
+    if (VERCEL_AUTOMATION_TOKEN) {
+        outboundHeaders.set('Authorization', `Bearer ${VERCEL_AUTOMATION_TOKEN}`);
     }
 
     // Log outbound headers
@@ -150,9 +151,9 @@ export default async function handler(request: Request) {
       console.log('Router: Content is HTML, attempting to inject <base> tag.');
       let body = await agentResponse.text();
       
-      // Inject the base tag right after the <head> tag.
-      // This ensures all relative paths in the document are resolved from the correct sub-path.
-      const baseHref = `/${slug}/`;
+      // The base href should be the root of the original deployment URL.
+      // This makes the browser fetch assets directly from the Vercel deployment.
+      const baseHref = previewUrl.endsWith('/') ? previewUrl : `${previewUrl}/`;
       console.log(`Router: Injecting baseHref: "${baseHref}"`);
 
       // Use a regular expression to robustly inject the base tag after the opening <head> tag, regardless of its attributes.
@@ -174,17 +175,18 @@ export default async function handler(request: Request) {
         statusText: agentResponse.statusText,
         headers: responseHeaders,
       });
+    } else {
+      // For all other content types, stream the response directly
+      return new Response(agentResponse.body, {
+        status: agentResponse.status,
+        statusText: agentResponse.statusText,
+        headers: responseHeaders,
+      });
     }
-
-    // For all other content types, stream the response directly.
-    return new Response(agentResponse.body, {
-      status: agentResponse.status,
-      statusText: agentResponse.statusText,
-      headers: responseHeaders,
-    });
 
   } catch (e) {
     console.error('Router error:', e);
     return new Response('An internal error occurred.', { status: 500 });
   }
 }
+
