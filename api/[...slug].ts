@@ -156,9 +156,9 @@ export default async function handler(request: Request) {
       console.log('Router: Content is HTML, attempting to inject <base> tag.');
       let body = await agentResponse.text();
       
-      // The base href should be the root of the original deployment URL.
-      // This makes the browser fetch assets directly from the Vercel deployment.
-      const baseHref = previewUrl.endsWith('/') ? previewUrl : `${previewUrl}/`;
+      // Inject the base tag right after the <head> tag.
+      // This ensures all relative paths in the document are resolved from the correct sub-path.
+      const baseHref = `/${slug}/`;
       console.log(`Router: Injecting baseHref: "${baseHref}"`);
 
       // Use a regular expression to robustly inject the base tag after the opening <head> tag, regardless of its attributes.
@@ -194,3 +194,4 @@ export default async function handler(request: Request) {
     return new Response('An internal error occurred.', { status: 500 });
   }
 }
+
