@@ -130,9 +130,12 @@ export default async function handler(request: Request) {
       console.error(`Router: Agent returned status ${agentResponse.status}. Body: ${errorBody}`);
       return new Response(
         `The agent application returned an error.\n\nStatus: ${agentResponse.status}\nBody:\n${errorBody}`,
-        { 
-          status: 502, 
-          headers: { 'Content-Type': 'text/plain' } 
+        {
+          status: 502,
+          headers: {
+            'Content-Type': 'text/plain',
+            'Access-Control-Allow-Origin': '*'
+          }
         }
       );
     }
@@ -143,6 +146,8 @@ export default async function handler(request: Request) {
         responseHeaders.set(key, value);
       }
     });
+    // Allow requests from any origin to prevent CORS errors.
+    responseHeaders.set('Access-Control-Allow-Origin', '*');
     const contentType = responseHeaders.get('content-type') || '';
     console.log(`Router: Agent response Content-Type: "${contentType}" for path: ${remainingPath}`);
 
@@ -189,4 +194,3 @@ export default async function handler(request: Request) {
     return new Response('An internal error occurred.', { status: 500 });
   }
 }
-
