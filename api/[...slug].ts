@@ -142,10 +142,38 @@ export default async function handler(request: Request) {
         responseHeaders.set(key, value);
       }
     });
-    // Stream the response back to the client
+    const contentType = responseHeaders.get('content-type') || '';
+
+    // If it's an HTML file, we need to inject a <base> tag to fix relative paths
+    if (contentType.includes('text/html')) {
+      let body = await agentResponse.text();
+      
+      // Inject the base tag right after the <head> tag.
+      // This ensures all relative paths in the document are resolved from the correct sub-path.
+      const baseHref = `/${slug}/`;
+      // A more robust solution might use a proper HTML parser, but this is fast and effective for this use case.
+      if (body.includes('<head>')) {
+        body = body.replace('<head>', `<head><base href="${baseHref}">`);
+      } else {
+        // Fallback if no <head> tag is present (less likely for full HTML docs)
+        body = `<head><base href="${baseHref}"></head>` + body;
+      }
+
+      // We've modified the body, so remove the content-length header to allow it to be recalculated.
+      responseHeaders.delete('content-length');
+      
+      return new Response(body, {
+        status: agentResponse.status,
+        statusText: agentResponse.statusText,
+        headers: responseHeaders,
+      });
+    }
+
+    // For all other content types, stream the response directly.
     return new Response(agentResponse.body, {
+      status: agentResponse.status,
+      statusText: agentResponse.statusText,
       headers: responseHeaders,
-      status: agentResponse.status
     });
 
   } catch (e) {
@@ -153,5 +181,3 @@ export default async function handler(request: Request) {
     return new Response('An internal error occurred.', { status: 500 });
   }
 }
-
-
