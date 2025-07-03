@@ -155,6 +155,9 @@ export default async function handler(request: Request) {
     if (contentType.includes('text/html')) {
       console.log('Router: Content is HTML, attempting to inject <base> tag.');
       let body = await agentResponse.text();
+
+      // Remove any existing <base> tags first to avoid conflicts.
+      body = body.replace(/<base[^>]*>/gi, '');
       
       // Inject the base tag right after the <head> tag.
       // This ensures all relative paths in the document are resolved from the correct sub-path.
