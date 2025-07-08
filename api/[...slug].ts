@@ -1,87 +1,113 @@
 const hopByHop = [
-  'host',
-  'connection',
-  'keep-alive',
-  'proxy-authenticate',
-  'proxy-authorization',
-  'te',
-  'trailer',
-  'transfer-encoding',
-  'upgrade',
-  'content-encoding',
-  'content-length',
-  'location',
-  'cookie',
+  "connection",
+  "keep-alive",
+  "proxy-authenticate",
+  "proxy-authorization",
+  "te",
+  "trailer",
+  "transfer-encoding",
+  "upgrade",
+  // Removed content-encoding and content-length as they can cause issues
 ];
 
 export const config = {
-  runtime: 'edge',
+  runtime: "edge",
 };
 
-// IMPORTANT: These environment variables must be set in your Vercel project settings.
 const SUPABASE_URL = process.env.SUPABASE_URL!;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY!;
 const VERCEL_AUTOMATION_TOKEN = process.env.VERCEL_AUTOMATION_TOKEN;
-const VERCEL_PROTECTION_BYPASS_SECRET = process.env.VERCEL_PROTECTION_BYPASS_SECRET;
 
 export default async function handler(request: Request) {
   const url = new URL(request.url);
 
-  // Get the original path from the Vercel-specific header.
-  // This is more reliable than parsing the rewritten URL's pathname.
-  const rewrittenUrl = request.headers.get('x-vercel-rewritten-url') || url.pathname;
-  const pathSegments = new URL(rewrittenUrl, url.origin).pathname.slice(1).split('/').filter(Boolean);
-
+  // Get the path segments
+  const pathSegments = url.pathname.slice(1).split("/").filter(Boolean);
   const slug = pathSegments[0];
-  const remainingPath = '/' + pathSegments.slice(1).join('/');
+  const remainingPath =
+    pathSegments.length > 1 ? "/" + pathSegments.slice(1).join("/") : "/";
 
-  // Ignore favicon requests to prevent log noise
-  if (slug === 'favicon.ico' || slug === 'favicon.png') {
-    return new Response(null, { status: 204 }); // No Content
+  // Ignore favicon requests
+  if (slug === "favicon.ico" || slug === "favicon.png") {
+    return new Response(null, { status: 204 });
   }
 
-  console.log(`Router: Received request for slug: "${slug}"`);
+  console.log(
+    `Router: Received request for slug: "${slug}", remaining path: "${remainingPath}"`
+  );
 
   if (!slug) {
-    return new Response('Agent slug not specified.', { status: 400 });
+    return new Response("Agent slug not specified.", { status: 400 });
   }
 
   try {
-    // 1. Look up the project in Supabase by its slug using the REST API
+    // 1. Look up the project in Supabase
     const supabaseUrl = `${SUPABASE_URL}/rest/v1/projects?select=preview_url&slug=eq.${slug}`;
     console.log(`Router: Querying Supabase with URL: ${supabaseUrl}`);
+
     const supabaseResponse = await fetch(supabaseUrl, {
       headers: {
-        'apikey': SUPABASE_ANON_KEY,
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-        'Accept': 'application/json',
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        Accept: "application/json",
       },
     });
+
+    if (!supabaseResponse.ok) {
+      console.error(
+        "Router: Supabase request failed:",
+        supabaseResponse.status
+      );
+      return new Response(`Database error: ${supabaseResponse.status}`, {
+        status: 500,
+      });
+    }
 
     const projects = await supabaseResponse.json();
     const project = projects?.[0];
 
-    if (!supabaseResponse.ok || !project || !project.preview_url) {
-      console.error('Router: Project slug not found or error fetching from Supabase:', projects);
-      return new Response(`Agent with slug "${slug}" not found.`, { status: 404 });
+    if (!project || !project.preview_url) {
+      console.error("Router: Project not found or no preview_url:", projects);
+      return new Response(`Agent with slug "${slug}" not found.`, {
+        status: 404,
+      });
     }
 
     const previewUrl = project.preview_url;
+    console.log(`Router: Found preview URL: ${previewUrl}`);
 
-    // 2. Fetch the content from the agent's Vercel deployment URL
-    // We need to construct the full URL to the resource on the target deployment.
-        const targetUrl = new URL(remainingPath + url.search, previewUrl);
+    // 2. Construct the target URL properly
+    const previewUrlObj = new URL(previewUrl);
 
-    // --- Robust proxy logic ---
-    // Create a new set of headers, allowing only specific safe ones to be passed through.
-    // This prevents unexpected client headers from interfering with Vercel's auth.
+    // Preserve existing query parameters from the preview URL (like __VERCEL_PROTECTION_BYPASS)
+    const targetUrl = new URL(remainingPath, previewUrlObj.origin);
+
+    // Add original query parameters from preview URL
+    previewUrlObj.searchParams.forEach((value, key) => {
+      targetUrl.searchParams.set(key, value);
+    });
+
+    // Add any query parameters from the incoming request
+    url.searchParams.forEach((value, key) => {
+      targetUrl.searchParams.set(key, value);
+    });
+
+    console.log(`Router: Target URL: ${targetUrl.toString()}`);
+
+    // 3. Prepare headers for the proxy request
     const outboundHeaders = new Headers();
+
+    // Allow more headers that might be needed
     const allowedHeaders = [
-      'accept',
-      'accept-encoding',
-      'accept-language',
-      'user-agent',
-      'referer',
+      "accept",
+      "accept-encoding",
+      "accept-language",
+      "user-agent",
+      "referer",
+      "cache-control",
+      "pragma",
+      "if-none-match",
+      "if-modified-since",
     ];
 
     request.headers.forEach((value, key) => {
@@ -89,106 +115,141 @@ export default async function handler(request: Request) {
         outboundHeaders.set(key, value);
       }
     });
-    // The Vercel Protection Bypass is handled by the `__VERCEL_PROTECTION_BYPASS` query parameter,
-    // which is already included in the `preview_url` fetched from Supabase.
-    // No additional headers are needed for this authentication method.
-    // For other auth methods, the Vercel Automation Token might be used.
+
+    // Add Vercel automation token if available
     if (VERCEL_AUTOMATION_TOKEN) {
-        outboundHeaders.set('Authorization', `Bearer ${VERCEL_AUTOMATION_TOKEN}`);
+      outboundHeaders.set("Authorization", `Bearer ${VERCEL_AUTOMATION_TOKEN}`);
     }
 
-    // Log outbound headers
-    outboundHeaders.forEach((value, key) => {
-      console.log(`[Proxy outbound header] ${key}: ${value}`);
-    });
-
+    // 4. Make the proxy request with redirect handling
     let currentUrl = targetUrl.toString();
     let agentResponse;
     let redirectCount = 0;
+
     while (redirectCount < 3) {
+      console.log(`Router: Fetching ${currentUrl} (redirect ${redirectCount})`);
+
       agentResponse = await fetch(currentUrl, {
+        method: request.method,
         headers: outboundHeaders,
-        redirect: 'manual',
-        cache: 'no-store',
+        body:
+          request.method !== "GET" && request.method !== "HEAD"
+            ? request.body
+            : undefined,
+        redirect: "manual",
       });
-      // Log status and headers
-      console.log(`[Proxy] ${currentUrl} -> status: ${agentResponse.status}`);
-      agentResponse.headers.forEach((value, key) => {
-        console.log(`[Proxy header] ${key}: ${value}`);
-      });
+
+      console.log(`Router: Response status: ${agentResponse.status}`);
+
       // If not a redirect, break
-      if (![301, 302, 303, 307, 308].includes(agentResponse.status)) break;
-      // Otherwise, follow the Location header
-      const location = agentResponse.headers.get('location');
-      if (!location) break;
+      if (![301, 302, 303, 307, 308].includes(agentResponse.status)) {
+        break;
+      }
+
+      // Follow the redirect
+      const location = agentResponse.headers.get("location");
+      if (!location) {
+        console.error("Router: Redirect without location header");
+        break;
+      }
+
       currentUrl = new URL(location, currentUrl).toString();
       redirectCount++;
     }
-    // If the agent returned an error, proxy the error response to the client for debugging
-    if (agentResponse.status !== 200) {
+
+    // 5. Handle non-200 responses
+    if (!agentResponse.ok) {
       const errorBody = await agentResponse.text();
-      console.error(`Router: Agent returned status ${agentResponse.status}. Body: ${errorBody}`);
+      console.error(
+        `Router: Agent returned status ${agentResponse.status}. Body: ${errorBody}`
+      );
+
       return new Response(
-        `The agent application returned an error.\n\nStatus: ${agentResponse.status}\nBody:\n${errorBody}`,
+        `The agent application returned an error.\n\nStatus: ${agentResponse.status}\nURL: ${currentUrl}\nBody:\n${errorBody}`,
         {
           status: 502,
           headers: {
-            'Content-Type': 'text/plain',
-            'Access-Control-Allow-Origin': '*'
-          }
+            "Content-Type": "text/plain",
+            "Access-Control-Allow-Origin": "*",
+          },
         }
       );
     }
-    // Remove hop-by-hop headers
+
+    // 6. Prepare response headers
     const responseHeaders = new Headers();
     agentResponse.headers.forEach((value, key) => {
       if (!hopByHop.includes(key.toLowerCase())) {
         responseHeaders.set(key, value);
       }
     });
-    // Allow requests from any origin to prevent CORS errors.
-    responseHeaders.set('Access-Control-Allow-Origin', '*');
-    const contentType = responseHeaders.get('content-type') || '';
-    console.log(`Router: Agent response Content-Type: "${contentType}" for path: ${remainingPath}`);
 
-    // If it's an HTML file, we need to inject a <base> tag to fix relative paths
-    if (contentType.includes('text/html')) {
-      console.log('Router: Content is HTML, rewriting relative paths.');
+    // Always add CORS headers
+    responseHeaders.set("Access-Control-Allow-Origin", "*");
+    responseHeaders.set(
+      "Access-Control-Allow-Methods",
+      "GET, POST, PUT, DELETE, OPTIONS"
+    );
+    responseHeaders.set(
+      "Access-Control-Allow-Headers",
+      "Content-Type, Authorization"
+    );
+
+    const contentType = responseHeaders.get("content-type") || "";
+    console.log(`Router: Content-Type: ${contentType}`);
+
+    // 7. Handle HTML content with path rewriting
+    if (contentType.includes("text/html")) {
+      console.log("Router: Processing HTML content");
       let body = await agentResponse.text();
-      
+
       const pathPrefix = `/${slug}`;
 
-      // This is a more robust regex that handles both single and double quotes,
-      // and also rewrites paths in `url()` functions for CSS within style tags or attributes.
-      
-      // Rewrite src, href, action attributes (handles single and double quotes)
-      body = body.replace(/(src|href|action)=(['"])\/(?!\/)(.*?)\2/gi, `$1=$2${pathPrefix}/$3$2`);
-      
-      // Rewrite url() in inline styles or style blocks
-      body = body.replace(/url\((['"]?)\/(?!\/)(.*?)\1\)/gi, `url($1${pathPrefix}/$2$1)`);
+      // More comprehensive path rewriting
+      // Handle src, href, action attributes
+      body = body.replace(
+        /(src|href|action)=(['"])\/((?!\/|https?:\/\/)[^'"]*)\2/gi,
+        `$1=$2${pathPrefix}/$3$2`
+      );
 
-      console.log('Router: Path rewriting complete.');
+      // Handle url() in CSS
+      body = body.replace(
+        /url\((['"]?)\/((?!\/|https?:\/\/)[^'"]*)\1\)/gi,
+        `url($1${pathPrefix}/$2$1)`
+      );
 
-      // We've modified the body, so remove the content-length header to allow it to be recalculated.
-      responseHeaders.delete('content-length');
-      
+      // Add base href if not present to help with relative paths
+      if (!body.includes("<base")) {
+        const baseTag = `<base href="${pathPrefix}/">`;
+        body = body.replace(/<head>/i, `<head>\n  ${baseTag}`);
+      }
+
+      // Remove content-length since we modified the body
+      responseHeaders.delete("content-length");
+
+      console.log("Router: HTML processing complete");
+
       return new Response(body, {
         status: agentResponse.status,
         statusText: agentResponse.statusText,
         headers: responseHeaders,
       });
     } else {
-      // For all other content types, stream the response directly
+      // For non-HTML content, stream directly
       return new Response(agentResponse.body, {
         status: agentResponse.status,
         statusText: agentResponse.statusText,
         headers: responseHeaders,
       });
     }
-
-  } catch (e) {
-    console.error('Router error:', e);
-    return new Response('An internal error occurred.', { status: 500 });
+  } catch (error) {
+    console.error("Router error:", error);
+    return new Response(`Internal router error: ${error.message}`, {
+      status: 500,
+      headers: {
+        "Content-Type": "text/plain",
+        "Access-Control-Allow-Origin": "*",
+      },
+    });
   }
 }
-
